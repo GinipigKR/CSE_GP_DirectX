@@ -154,6 +154,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    printf("[SYSTEM] 마우스 왼쪽 클릭을 통해 육망성을 원점에 위치시킬 수 있습니다.\n");
+    printf("[SYSTEM] 키보드의 WASD와 방향키로 육망성의 위치를 변경시킬 수 있습니다.\n");
+
     WNDCLASSEXW wcex = { sizeof(WNDCLASSEX) };
     wcex.lpfnWndProc = WndProc;
     wcex.hInstance = hInstance;

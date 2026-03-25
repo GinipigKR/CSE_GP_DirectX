@@ -12,10 +12,10 @@
 //정점 수를 미리 정의해둠.
 #define VERTEX_COUNT 6
 
-ID3D11Device* g_pd3dDevice = nullptr;         
-ID3D11DeviceContext* g_pImmediateContext = nullptr;   
-IDXGISwapChain* g_pSwapChain = nullptr;          
-ID3D11RenderTargetView* g_pRenderTargetView = nullptr;  
+ID3D11Device* g_pd3dDevice = nullptr;
+ID3D11DeviceContext* g_pImmediateContext = nullptr;
+IDXGISwapChain* g_pSwapChain = nullptr;
+ID3D11RenderTargetView* g_pRenderTargetView = nullptr;
 
 struct Vertex {
     float x, y, z;
@@ -53,8 +53,7 @@ typedef struct {
 
 }GameContext;
 
-//게임 내 육망성 오브젝트?라고해야하나 유니티로 따지면 Transform 중 Position?, Input?
-GameContext gameContext = { 0.0f,0.0f,false,false,false,false }; 
+GameContext gameContext = { 0.0f,0.0f,false,false,false,false };
 
 //게임 루프 중 Update Game State
 //윈도우 프로시저로 설정된 bool 값을 통해 실제 pos 값을 설정
@@ -77,7 +76,8 @@ void Update() {
     }
 }
 
-void Render(Vertex vertices[VERTEX_COUNT]) {
+
+void Render(Vertex vertices[VERTEX_COUNT], ID3D11InputLayout* pInputLayout, ID3D11VertexShader* vShader, ID3D11PixelShader* pShader) {
     //화면 비율로 인해 찌그러짐을 고려한 적절한 육망성의 정점 정의
 
     //첫 번째 삼각형
@@ -86,18 +86,46 @@ void Render(Vertex vertices[VERTEX_COUNT]) {
     vertices[2] = { -0.325f + gameContext.posX, -0.25f + gameContext.posY, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f };
 
     //두 번째 삼각형
-    //GPT 피셜 순서가 바뀌면 뒷면? 으로 인식되어서 렌더링이 안된다고 함.
     vertices[3] = { 0.0f + gameContext.posX,  -0.5f + gameContext.posY, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f };
     vertices[4] = { -0.325f + gameContext.posX, 0.25f + gameContext.posY, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f };
     vertices[5] = { 0.325f + gameContext.posX, 0.25f + gameContext.posY, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f };
+
+    //설정한 정점을 기준으로 버퍼 생성
+    ID3D11Buffer* pVBuffer;
+    D3D11_BUFFER_DESC bd = { sizeof(Vertex) * VERTEX_COUNT, D3D11_USAGE_DEFAULT, D3D11_BIND_VERTEX_BUFFER, 0, 0, 0 };
+    D3D11_SUBRESOURCE_DATA initData = { vertices, 0, 0 };
+    g_pd3dDevice->CreateBuffer(&bd, &initData, &pVBuffer);
+   
+    float clearColor[] = { 0.1f, 0.2f, 0.3f, 1.0f };
+    g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, clearColor);
+
+    g_pImmediateContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr);
+    D3D11_VIEWPORT vp = { 0, 0, 800, 600, 0.0f, 1.0f };
+    g_pImmediateContext->RSSetViewports(1, &vp);
+
+    g_pImmediateContext->IASetInputLayout(pInputLayout);
+    UINT stride = sizeof(Vertex), offset = 0;
+    g_pImmediateContext->IASetVertexBuffers(0, 1, &pVBuffer, &stride, &offset);
+
+    g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    g_pImmediateContext->VSSetShader(vShader, nullptr, 0);
+    g_pImmediateContext->PSSetShader(pShader, nullptr, 0);
+
+    g_pImmediateContext->Draw(VERTEX_COUNT, 0);
+
+    g_pSwapChain->Present(0, 0);
+
+    //루프 안에서 버퍼를 Create 하였으므로, 루프 마지막에 Release해줌
+    if (pVBuffer) pVBuffer->Release();
 }
 
 
-//게임 루프 중 Process Input 인듯?
+//게임 루프 중 Process Input에 속함.
 //전역변수로 선언된 gameContext의 버튼 클릭 여부를 설정
 //자주 화면을 벗어나서, 원점으로 되돌리기 위한 마우스 클릭 여부 설정
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-    switch (message) 
+    switch (message)
     {
     case WM_KEYDOWN:
 
@@ -186,7 +214,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_pRenderTargetView);
     pBackBuffer->Release();
 
-    // 3. 셰이더 컴파일 및 생성
     ID3DBlob* vsBlob, * psBlob;
     D3DCompile(shaderSource, strlen(shaderSource), nullptr, nullptr, nullptr, "VS", "vs_4_0", 0, 0, &vsBlob, nullptr);
     D3DCompile(shaderSource, strlen(shaderSource), nullptr, nullptr, nullptr, "PS", "ps_4_0", 0, 0, &psBlob, nullptr);
@@ -205,60 +232,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     g_pd3dDevice->CreateInputLayout(layout, 2, vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &pInputLayout);
     vsBlob->Release(); psBlob->Release();
 
-    
+
+    //정점 배열을 미리 선언
+    Vertex vertices[VERTEX_COUNT];
 
     MSG msg = { 0 };
     while (WM_QUIT != msg.message) {
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
-            //[궁금증] 이 부분이 Event Loop이고, Window Procedure이 Event Handler인건가? 그런듯
-            //입력이 들어왔을 때, 
-            // 해당 입력을 적절한 메시지로 번역하고(TranslateMessage), 
-            // Window Procedure 함수로 전달(DispatchMessage)
+            //게임루프 중 Process Input에 속하는듯
+            //어디서부터 어디까지가 Process Input인가
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
         else {
-            //여기부터 내가 ========================================
             //게임 루프 중 Update
             Update();
 
             //게임 루프 중 Render
-            Vertex vertices[VERTEX_COUNT];
-            Render(vertices);
+            Render(vertices, pInputLayout, vShader, pShader);
 
-            ID3D11Buffer* pVBuffer;
-            D3D11_BUFFER_DESC bd = { sizeof(vertices), D3D11_USAGE_DEFAULT, D3D11_BIND_VERTEX_BUFFER, 0, 0, 0 };
-            D3D11_SUBRESOURCE_DATA initData = { vertices, 0, 0 };
-            g_pd3dDevice->CreateBuffer(&bd, &initData, &pVBuffer);
-
-
-            //여기까지 내가 =========================================
-
-            float clearColor[] = { 0.1f, 0.2f, 0.3f, 1.0f };
-            g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, clearColor);
-
-            g_pImmediateContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr);
-            D3D11_VIEWPORT vp = { 0, 0, 800, 600, 0.0f, 1.0f };
-            g_pImmediateContext->RSSetViewports(1, &vp);
-
-            g_pImmediateContext->IASetInputLayout(pInputLayout);
-            UINT stride = sizeof(Vertex), offset = 0;
-            g_pImmediateContext->IASetVertexBuffers(0, 1, &pVBuffer, &stride, &offset);
-
-            g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-            g_pImmediateContext->VSSetShader(vShader, nullptr, 0);
-            g_pImmediateContext->PSSetShader(pShader, nullptr, 0);
-
-            g_pImmediateContext->Draw(VERTEX_COUNT, 0);
-
-            g_pSwapChain->Present(0, 0);
-
-            //루프 안에서 버퍼를 Create 하였으므로, 루프 마지막에 Release해줌
-            if (pVBuffer) pVBuffer->Release();
         }
     }
-    
+
     if (pInputLayout) pInputLayout->Release();
     if (vShader) vShader->Release();
     if (pShader) pShader->Release();

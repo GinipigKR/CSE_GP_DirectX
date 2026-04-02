@@ -55,6 +55,19 @@ typedef struct {
 
 GameContext gameContext = { 0.0f,0.0f,false,false,false,false };
 
+
+//과제 정답의 ProcessInput
+//void ProcessInput() {
+//    MSG msg;
+//    while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+//        if (msg.message == WM_QUIT) ctx->isRunning = 0;
+//
+//        TranslateMessage(&msg);
+//        DispatchMessage(&msg);
+//    }
+//}
+
+
 //게임 루프 중 Update Game State
 //윈도우 프로시저로 설정된 bool 값을 통해 실제 pos 값을 설정
 void Update() {
@@ -80,6 +93,7 @@ void Update() {
 void Render(Vertex vertices[VERTEX_COUNT], ID3D11InputLayout* pInputLayout, ID3D11VertexShader* vShader, ID3D11PixelShader* pShader) {
     //화면 비율로 인해 찌그러짐을 고려한 적절한 육망성의 정점 정의
 
+    //[체크] 이 부분이 Update에 들어가야함.
     //첫 번째 삼각형
     vertices[0] = { 0.0f + gameContext.posX,  0.5f + gameContext.posY, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f };
     vertices[1] = { 0.325f + gameContext.posX, -0.25f + gameContext.posY, 0.5f, 1.0f, 0.0f, 0.0f, 1.0f };
@@ -107,6 +121,7 @@ void Render(Vertex vertices[VERTEX_COUNT], ID3D11InputLayout* pInputLayout, ID3D
     UINT stride = sizeof(Vertex), offset = 0;
     g_pImmediateContext->IASetVertexBuffers(0, 1, &pVBuffer, &stride, &offset);
 
+    //Primitive에 대한 TOPOLOGY 설정하는 부분 중요
     g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     g_pImmediateContext->VSSetShader(vShader, nullptr, 0);
@@ -211,8 +226,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     ID3D11Texture2D* pBackBuffer = nullptr;
     g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pBackBuffer);
-    g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_pRenderTargetView);
-    pBackBuffer->Release();
+
+    //[중요] 포인터 변수를 Release하는거지 포인터가 가리키는 애를 Release하는게 아니다.
+    //4주차 2차시 -1:10쯤
+    //reference count
+    if (pBackBuffer != nullptr)
+    {
+        g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_pRenderTargetView);
+        pBackBuffer->Release();
+    }
+    
 
     ID3DBlob* vsBlob, * psBlob;
     D3DCompile(shaderSource, strlen(shaderSource), nullptr, nullptr, nullptr, "VS", "vs_4_0", 0, 0, &vsBlob, nullptr);
@@ -223,7 +246,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     g_pd3dDevice->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &vShader);
     g_pd3dDevice->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &pShader);
 
-
+    //중요!! 강의 다시 들으면서 강의에서 언급한 부분 주석 및 필기하면 좋을 듯?
     D3D11_INPUT_ELEMENT_DESC layout[] = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -236,6 +259,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     //정점 배열을 미리 선언
     Vertex vertices[VERTEX_COUNT];
 
+    //[중요] 초기 루프 -> 강의에 적힌 코드 참고
     MSG msg = { 0 };
     while (WM_QUIT != msg.message) {
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -254,6 +278,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         }
     }
 
+    /*
+    while (game.isRunning) {
+        ProcessInput(&game);
+        Update(&game);
+        Render(&game);
+    }
+    game은 GameContext*
+    */
+
+    //[중요] 메모리 해제
     if (pInputLayout) pInputLayout->Release();
     if (vShader) vShader->Release();
     if (pShader) pShader->Release();
@@ -263,4 +297,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     if (g_pd3dDevice) g_pd3dDevice->Release();
 
     return (int)msg.wParam;
+
+
+    //교수님은 게임 루프 윗 부분을 Initialize 단계, 아랫 부분을 Release라고 부르고 이들을 함수로 묶는게 좋다고 하심
+    //이유는 나중에 게임에 대한 초기화, DirectX에 대한 초기화 등 많은 초기화 및 해제가 있을 수 있기 때문인듯
+    //Create 해준 것들은 모두 해제 해줘야 한다.
 }

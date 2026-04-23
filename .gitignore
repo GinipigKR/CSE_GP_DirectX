@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/Project1
+/필기용프로젝트
+/CSE_GP_DirectX_Week6/main.cpp
